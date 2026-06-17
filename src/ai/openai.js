@@ -1,7 +1,7 @@
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const Groq = require("groq-sdk");
 const supabase = require("../database/client");
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 const SYSTEM_PROMPT = `You are Chris AI Assistant, a professional sales and support bot for a software development business based in Kenya.
 
@@ -37,39 +37,44 @@ async function getConversationHistory(contactId, limit = 20) {
     .limit(limit);
 
   return (data || []).map((row) => ({
-    role: row.sender === "bot" ? "model" : "user",
-    parts: [{ text: row.message }],
+    role: row.sender === "bot" ? "assistant" : "user",
+    content: row.message,
   }));
 }
 
 /**
- * Generate AI reply using Gemini (free)
+ * Generate AI reply using Groq
  */
 async function generateReply(contactId, userMessage) {
   try {
     const history = await getConversationHistory(contactId);
 
-    console.log(`🧠 Gemini history length: ${history.length}`);
-    console.log(`🔑 Gemini API key set: ${!!process.env.GEMINI_API_KEY}`);
+    console.log(`🧠 Groq history length: ${history.length}`);
+    console.log(`🔑 Groq API key set: ${!!process.env.GROQ_API_KEY}`);
 
-    const model = genAI.getGenerativeModel({
-      model: "gemini-2.0-flash",
-      systemInstruction: SYSTEM_PROMPT,
+    const messages = [
+      { role: "system", content: SYSTEM_PROMPT },
+      ...history,
+      { role: "user", content: userMessage },
+    ];
+
+    const completion = await groq.chat.completions.create({
+      model: "llama-3.3-70b-versatile",
+      messages,
+      max_tokens: 300,
+      temperature: 0.7,
     });
 
-    const chat = model.startChat({ history });
+    const rawReply = completion.choices[0]?.message?.content?.trim() || "";
 
-    const result = await chat.sendMessage(userMessage);
-    const rawReply = result.response.text().trim();
-
-    console.log(`🤖 Gemini raw reply: "${rawReply}"`);
+    console.log(`🤖 Groq raw reply: "${rawReply}"`);
 
     const isHotLead = rawReply.includes("[HOT_LEAD]");
     const cleanReply = rawReply.replace("[HOT_LEAD]", "").trim();
 
     return { reply: cleanReply, isHotLead };
   } catch (err) {
-    console.error("❌ Gemini error:", err.message);
+    console.error("❌ Groq error:", err.message);
     return { reply: "Sorry, I'm having trouble right now. Please try again in a moment.", isHotLead: false };
   }
 }
