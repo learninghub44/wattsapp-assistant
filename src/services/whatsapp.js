@@ -5,10 +5,11 @@ const client = twilio(
   process.env.TWILIO_AUTH_TOKEN
 );
 
-const FROM = `whatsapp:${process.env.TWILIO_WHATSAPP_NUMBER}`;
+// ALWAYS fixed for WhatsApp Sandbox
+const FROM = "whatsapp:+14155238886";
 
 /**
- * Send a WhatsApp message via Twilio
+ * Send WhatsApp message via Twilio
  */
 async function sendMessage(to, text) {
   try {
@@ -17,18 +18,18 @@ async function sendMessage(to, text) {
       to: `whatsapp:${to}`,
       body: text,
     });
+
+    console.log("✅ Message sent:", msg.sid);
     return msg;
+
   } catch (err) {
-    console.error("Twilio send error:", err.message);
-    throw err;
+    console.error("❌ Twilio send error:", err);
   }
 }
 
 /**
- * Mark as read — not supported in Twilio sandbox, no-op
+ * No-op for sandbox
  */
-async function markAsRead(messageId) {
-  // Twilio sandbox does not support read receipts
-}
+async function markAsRead() {}
 
 module.exports = { sendMessage, markAsRead };
