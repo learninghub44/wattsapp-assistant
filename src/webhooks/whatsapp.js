@@ -7,6 +7,12 @@ const { generateReply } = require("../ai/openai");
 const { sendMessage } = require("../services/whatsapp");
 const { upsertLead } = require("../services/leads");
 
+// Helper: send empty TwiML so Twilio doesn't treat the HTTP response as a message
+const emptyTwiML = (res) => {
+  res.set("Content-Type", "text/xml");
+  res.send("<Response></Response>");
+};
+
 /**
  * WhatsApp Webhook (Twilio)
  * Receives incoming messages from Twilio Sandbox
@@ -21,7 +27,7 @@ router.post("/", async (req, res) => {
     const profileName = body.ProfileName || null;
 
     if (!phone || !userText) {
-      return res.sendStatus(200);
+      return emptyTwiML(res);
     }
 
     console.log(`📩 Incoming: ${phone} -> ${userText}`);
@@ -50,14 +56,12 @@ router.post("/", async (req, res) => {
       timeline: null,
     });
 
-    // IMPORTANT: Always respond quickly to Twilio
-    return res.sendStatus(200);
+    // IMPORTANT: Return empty TwiML — NOT sendStatus(200) which sends "OK" as a message
+    return emptyTwiML(res);
 
   } catch (error) {
     console.error("❌ Webhook error:", error.message);
-
-    // Still return 200 so Twilio doesn't retry spam
-    return res.sendStatus(200);
+    return emptyTwiML(res);
   }
 });
 
