@@ -29,19 +29,17 @@ router.post("/", async (req, res) => {
     // 1. Get or create contact
     const contact = await getOrCreateContact(phone, profileName);
 
-    // 2. Save user message
-    await saveMessage(contact.id, userText, "user");
-
-    // 3. Generate AI reply
+    // 2. Generate AI reply (history fetched before saving current message)
     const { reply, isHotLead } = await generateReply(contact.id, userText);
 
-    // 4. Save bot reply
+    // 3. Save user message + bot reply AFTER generation
+    await saveMessage(contact.id, userText, "user");
     await saveMessage(contact.id, reply, "bot");
 
-    // 5. Send WhatsApp reply via Twilio API
+    // 4. Send WhatsApp reply via Twilio API
     await sendMessage(phone, reply);
 
-    // 6. Update lead data
+    // 5. Update lead data
     await upsertLead({
       contactId: contact.id,
       phone,
