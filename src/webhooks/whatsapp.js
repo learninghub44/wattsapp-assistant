@@ -4,48 +4,44 @@ const router = express.Router();
 const { getOrCreateContact } = require("../services/contacts");
 const { saveMessage } = require("../services/conversations");
 const { generateReply } = require("../ai/openai");
-const { sendMessage, markAsRead } = require("../services/whatsapp");
+const { sendMessage } = require("../services/whatsapp");
 const { upsertLead } = require("../services/leads");
 
 /**
- * Twilio sends POST with form data (not JSON)
- * No GET verification needed — Twilio uses a different auth model
+ * WhatsApp Webhook (Twilio)
+ * Receives incoming messages from Twilio Sandbox
  */
 router.post("/", async (req, res) => {
-  // Respond immediately with empty TwiML to prevent Twilio timeout
-  res.set("Content-Type", "text/xml");
-  res.send("<Response></Response>");
-
   try {
     const body = req.body;
 
-    // Twilio fields
-    const phone = body.From?.replace("whatsapp:", ""); // e.g. +2547XXXXXXXX
+    // Twilio WhatsApp format
+    const phone = body.From?.replace("whatsapp:", "");
     const userText = body.Body?.trim();
     const profileName = body.ProfileName || null;
 
-    if (!phone || !userText) return;
+    if (!phone || !userText) {
+      return res.sendStatus(200);
+    }
 
-    console.log(`📩 Message from ${phone}: ${userText}`);
+    console.log(`📩 Incoming: ${phone} -> ${userText}`);
 
-    await markAsRead(null); // no-op for Twilio
-
-    // Get or create contact
+    // 1. Get or create contact
     const contact = await getOrCreateContact(phone, profileName);
 
-    // Save incoming message
+    // 2. Save user message
     await saveMessage(contact.id, userText, "user");
 
-    // Generate AI reply
+    // 3. Generate AI reply
     const { reply, isHotLead } = await generateReply(contact.id, userText);
 
-    // Save bot reply
+    // 4. Save bot reply
     await saveMessage(contact.id, reply, "bot");
 
-    // Send reply via Twilio
+    // 5. Send WhatsApp reply via Twilio API
     await sendMessage(phone, reply);
 
-    // Upsert lead
+    // 6. Update lead data
     await upsertLead({
       contactId: contact.id,
       phone,
@@ -55,8 +51,15 @@ router.post("/", async (req, res) => {
       budget: null,
       timeline: null,
     });
-  } catch (err) {
-    console.error("Webhook processing error:", err.message);
+
+    // IMPORTANT: Always respond quickly to Twilio
+    return res.sendStatus(200);
+
+  } catch (error) {
+    console.error("❌ Webhook error:", error.message);
+
+    // Still return 200 so Twilio doesn't retry spam
+    return res.sendStatus(200);
   }
 });
 
