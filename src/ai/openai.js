@@ -46,22 +46,32 @@ async function getConversationHistory(contactId, limit = 20) {
  * Generate AI reply using Gemini (free)
  */
 async function generateReply(contactId, userMessage) {
-  const history = await getConversationHistory(contactId);
+  try {
+    const history = await getConversationHistory(contactId);
 
-  const model = genAI.getGenerativeModel({
-    model: "gemini-1.5-flash",
-    systemInstruction: SYSTEM_PROMPT,
-  });
+    console.log(`🧠 Gemini history length: ${history.length}`);
+    console.log(`🔑 Gemini API key set: ${!!process.env.GEMINI_API_KEY}`);
 
-  const chat = model.startChat({ history });
+    const model = genAI.getGenerativeModel({
+      model: "gemini-1.5-flash",
+      systemInstruction: SYSTEM_PROMPT,
+    });
 
-  const result = await chat.sendMessage(userMessage);
-  const reply = result.response.text().trim();
+    const chat = model.startChat({ history });
 
-  const isHotLead = reply.includes("[HOT_LEAD]");
-  const cleanReply = reply.replace("[HOT_LEAD]", "").trim();
+    const result = await chat.sendMessage(userMessage);
+    const rawReply = result.response.text().trim();
 
-  return { reply: cleanReply, isHotLead };
+    console.log(`🤖 Gemini raw reply: "${rawReply}"`);
+
+    const isHotLead = rawReply.includes("[HOT_LEAD]");
+    const cleanReply = rawReply.replace("[HOT_LEAD]", "").trim();
+
+    return { reply: cleanReply, isHotLead };
+  } catch (err) {
+    console.error("❌ Gemini error:", err.message);
+    return { reply: "Sorry, I'm having trouble right now. Please try again in a moment.", isHotLead: false };
+  }
 }
 
 module.exports = { generateReply };
